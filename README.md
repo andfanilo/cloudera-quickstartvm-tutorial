@@ -28,7 +28,7 @@ For the first part of the tutorial, we will interact with a [trucks geolocation 
 
 
 
-##  TD1 - Hadoop, MapReduce, Pig, Hive
+##  TD1 - First steps in the Hadoop ecosystem
 
 For today, most of our interactions to the Hadoop cluster will be done through [Hue](https://docs.cloudera.com/documentation/enterprise/5-13-x/topics/hue.html).
 
@@ -149,21 +149,184 @@ LOCATION '/user/cloudera/geoloc';
 SELECT truckid FROM geolocation LIMIT 10;
 ```
 
-* Or with Hue, on the left select SQL, click on the + button, well you will have to look by yourself a little bit :)...
+* Or with Hue, on the sidebar select SQL, click on the + button, and then manually select the CSV file.
 
 
-
-* Are you able to count the list of distinct cities visited per truckid, and mean velocity per truckid ?
+* Are you again able to count the list of distinct cities visited per truckid, and mean velocity per truckid ?
 
   
 
 
+#### 6. Impala
 
-## TD2 - Hue and Zeppelin
+Apache Impala is an open source  massively parallel processing SQL query engine for data stored in a  computer cluster running Apache Hadoop 
 
-You can find the [Hue documentation](https://docs.cloudera.com/documentation/enterprise/5-13-x/topics/hue.html).
+To save time during queries, Impala does not poll constantly for metadata changes. So the first thing we must do is tell Impala that its metadata is out of date. Then we should see our tables show up, ready to be queried: 
 
-Today we will analyze some HTML files by web scraping some sites and using Hue/Zeppelin to chart.
+* Go to the Impala editor instead of Hive editor and run
+
+```sql
+invalidate metadata;
+
+show tables;
+```
+
+* Rerun one of the SQL scripts you run before. Can you notice the speed difference ?
+
+In the editor, on the left of results table you may notice a small graph icon. With this, you can visualize the results on a chart instead of a table. 
+
+* Count the number of geolocations per trucks and display it on a bar chart.
+* Select the truck `A80` and plot its geolocation coordinates in the Impala editor.
+
+
+
+## TD2 - Unstructured data analytics
+
+### Log exploration
+
+
+Let's analyze some log files provided by the Cloudera VM. Those are provided locally in `/opt/examples/log_files/access.log.2`. 
+
+_PS: if you still stuck on this tutorial, you can consult the [original piece](https://www.cloudera.com/developers/get-started-with-hadoop-tutorial/exercise-2.html) to start._
+
+* Import the data into HDFS, for example in `/user/cloudera/logs`.
+* On HDFS, you can read the last data with `hdfs dfs -tail <path_to_file>`. Read the latest lines of the log file. What format is it ? How could you extract data from this ?
+
+#### Impala analysis
+
+Let's preprocess the Apache logs file with Hive before using Impala for analysis.
+
+* Create an external Hive table `intermediate_access_logs`
+
+```
+CREATE EXTERNAL TABLE intermediate_access_logs (
+    ip STRING,
+    date STRING,
+    method STRING,
+    url STRING,
+    http_version STRING,
+    code1 STRING,
+    code2 STRING,
+    dash STRING,
+    user_agent STRING)
+ROW FORMAT SERDE 'org.apache.hadoop.hive.contrib.serde2.RegexSerDe'
+WITH SERDEPROPERTIES (
+    'input.regex' = '([^ ]*) - - \\[([^\\]]*)\\] "([^\ ]*) ([^\ ]*) ([^\ ]*)" (\\d*) (\\d*) "([^"]*)" "([^"]*)"',
+    'output.format.string' = "%1$$s %2$$s %3$$s %4$$s %5$$s %6$$s %7$$s %8$$s %9$$s")
+LOCATION '/user/cloudera/logs';
+```
+
+You may notice the difference with the previous table, we have changed the SERDE from CSV to regex. This SERDE is not provided by default, you need to add it via Hive with the following command :
+
+```
+ADD JAR /usr/lib/hive/lib/hive-contrib.jar;
+```
+
+* Let's create a table with the data preprocessed by the regex, so we can use it in Impala : 
+
+```
+CREATE EXTERNAL TABLE tokenized_access_logs (
+    ip STRING,
+    date STRING,
+    method STRING,
+    url STRING,
+    http_version STRING,
+    code1 STRING,
+    code2 STRING,
+    dash STRING,
+    user_agent STRING)
+ROW FORMAT DELIMITED FIELDS TERMINATED BY ','
+LOCATION '/user/hive/warehouse/tokenized_access_logs';
+
+INSERT OVERWRITE TABLE tokenized_access_logs SELECT * FROM intermediate_access_logs;
+```
+
+* Update the metadata in Impala :
+
+```
+invalidate metadata;
+
+show tables;
+```
+
+* Display how many times each product has been bought ?ore 
+* What percentage of `IP addresses`  went to checkout their basket ?
+* If you case the date as a `Date` you should be able to build a web journey of an IP address on the website. For all IP adresses that went to checkout, compute the number of products each has bought before.
+
+
+
+#### Spark analysis
+
+TODO
+
+
+
+#### Bonus - MapReduce code
+
+You can find a [good Youtube video](https://www.youtube.com/watch?v=l3MssCo2eSU) on this matter.
+
+* Open Eclispe. There you will find a `StubMapper`, `StubReducer` and `StubDriver`.
+
+You can try to count how many times each product has been bought by completing those Stub classes. For that, in the `map` you must parse the log with the same regex as the Hive one, find if the url contains a product and put the product in key with value 1. 
+
+* For that you will need to implement the `map` function in `StubMapper`, the `reduce` in `StubReducer` and the `main` in the `StubDriver`. The following are some examples :
+
+```java
+@Override
+public void map(Object key, Text value, Context context) throws IOException, InterruptedException {
+    String v = value.toString();
+    for (int i = 0; i < v.length(); i++) {
+        character.set(v.substring(i, i + 1));
+        context.write(character, one);
+    }
+}
+```
+
+``` java
+@Override
+public void reduce(Text key, Iterable<LongWritable> values, Context context) throws IOException, InterruptedException {
+    long sum = 0;
+    for (LongWritable val : values) {
+        sum += val.get();
+    }
+    result.set(sum);
+    context.write(key, result);
+}
+```
+
+```java
+public static void main(String[] args) throws Exception {
+    int res = ToolRunner.run(new Configuration(), new StubDriver(), args);
+    System.exit(res);
+}
+ 
+ @Override
+ public int run(String[] args) throws Exception {
+
+    Configuration conf = this.getConf();
+
+    // Create job
+    Job job = Job.getInstance(conf, "Job");
+    job.setJarByClass(StubDriver.class);
+
+    job.setMapperClass(StubMapper.class);
+    job.setReducerClass(StubReducer.class);
+
+    job.setOutputKeyClass(Text.class);
+    job.setOutputValueClass(LongWritable.class);
+
+    FileInputFormat.addInputPath(job, new Path(args[0]));
+    job.setInputFormatClass(TextInputFormat.class);
+
+    FileOutputFormat.setOutputPath(job, new Path(args[1]));
+    job.setOutputFormatClass(TextOutputFormat.class);
+
+    return job.waitForCompletion(true) ? 0 : 1;
+}
+```
+
+* Create a `.jar` out of the project with all dependencies.
+* Run the code through the `yarn jar ...` command.
 
 
 
