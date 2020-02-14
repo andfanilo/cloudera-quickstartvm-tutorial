@@ -90,6 +90,9 @@ Now we want to run a wordcount on a file inside HDFS, let's run it on files insi
 * Examine the `hdfs:///user/cloudera/output` folder. You can use `hdfs dfs -ls output` and `hdfs dfs -cat output/part-r-00000`. Explain
   * Also see the logs in a new tab to the favorite `Hadoop > YARN Resource Manager` in Firefox. Explain.
 
+* Only one reducer is working there. You can edit the number of reducers running with the flag `-D mapred.reduce.tasks=10` . Edit the previous command to change the number of reducers working. You should maybe remove or change the name of the `output` folder.
+  * Examine the output folder again. Can you note a difference with the previous execution ?
+
 
 
 #### 4. Pig
@@ -189,7 +192,7 @@ Let's analyze some log files provided by the Cloudera VM. Those are provided loc
 
 _PS: if you still stuck on this tutorial, you can consult the [original piece](https://www.cloudera.com/developers/get-started-with-hadoop-tutorial/exercise-2.html) to start._
 
-* Import the data into HDFS, for example in `/user/cloudera/logs`.
+* Import the data into HDFS, for example inside the folder `/user/cloudera/logs`.
 * On HDFS, you can read the last data with `hdfs dfs -tail <path_to_file>`. Read the latest lines of the log file. What format is it ? How could you extract data from this ?
 
 #### Impala analysis
@@ -252,6 +255,8 @@ show tables;
 * Display how many times each product has been bought ?ore 
 * What percentage of `IP addresses`  went to checkout their basket ?
 * If you case the date as a `Date` you should be able to build a web journey of an IP address on the website. For all IP adresses that went to checkout, compute the number of products each has bought before.
+
+* **Bonus** - Try to connect your PowerBI to Impala, by connecting on `localhost:21000`.
 
 
 
@@ -330,9 +335,13 @@ public static void main(String[] args) throws Exception {
 
 
 
-## TD3 - HBase
+## TD3 - Analyzing web scraping
+
+#### Ricco's website
 
 
+
+#### Wikipedia file dumps 
 
 
 
