@@ -74,6 +74,8 @@ su hdfs
 hdfs dfs -chmod -R 777 /tmp
 ```
 
+_PS : don't forget to `exit` twice to go back to user `cloudera`, else you are going to have permission errors accessing the HDFS folders_.
+
 
 
 #### 3. Map Reduce 
@@ -260,9 +262,61 @@ show tables;
 
 
 
-#### Spark analysis
+#### PySpark analysis
 
-TODO
+We can connect to the Hadoop cluster using Pyspark through YARN.
+
+* Install [Miniconda](https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh)
+
+```shell
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+bash Miniconda3-latest-Linux-x86_64.sh
+conda init # if you did not choose to init conda
+```
+
+* Exit the shell and open a new one to activate the conda shell. 
+* Install all you need _(let's not create a conda environment today)_ :
+
+```
+conda install -c cyclus java-jdk
+pip install numpy jupyter jupyterlab pyspark==2.2.3
+```
+
+* Launch a Jupyter notebook and pass an environment variable indicating the path to the Python executable :
+
+```shell
+export JAVA_HOME="/home/cloudera/miniconda3/jre"
+pyspark
+```
+
+I got a `Caused by: java.lang.RuntimeException: The root scratch dir: /tmp/hive on HDFS should be writable. Current permissions are: rwx------` error on my first try. 
+
+* Change the permissions for `/tmp/hive` to 777. You should know that now but `hdfs dfs -chmod -R 777 /tmp` using the `hdfs`user. 
+* Relaunch the command but using the notebook this time :
+
+```shell
+PYSPARK_PYTHON="/home/cloudera/miniconda3/bin/python" PYSPARK_DRIVER_PYTHON_OPTS="/home/cloudera/miniconda3/bin/jupyter-notebook --port=9099 --NotebookApp.token=''" pyspark
+```
+
+This creates a Jupyter notebook on port 9099, you can access it on Firefox through `http://localhost:9099`.
+
+* In your first cell you can try :
+
+```python
+sc = SparkContext.getOrCreate()
+def mod(x):
+    import numpy as np
+    return (x, np.mod(x, 2))
+
+rdd = sc.parallelize(range(1000)).map(mod).take(10)
+print(rdd)
+```
+
+* We need to stop this spark context and start a new one connected to yarn :
+
+```python
+sc.stop()
+```
 
 
 
