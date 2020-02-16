@@ -21,8 +21,8 @@ For the following exercises, we will use the [Cloudera quickstart VM](https://do
 
 The virtual machine should start and you should have access to a window. Do take note that the machine virtual by default is in QWERTY.
 
-* Open a terminal and type `setxkbmap fr` to temporarily change to AZERTY.
 * To [enable copy/paste](https://www.techrepublic.com/article/how-to-enable-copy-and-paste-in-virtualbox/), select `Devices > Shared Clipboard > Bidirectional`.
+* Open a terminal and type `setxkbmap fr` to temporarily change to AZERTY.
 
 For the first part of the tutorial, we will interact with a [trucks geolocation dataset from the Cloudera tutorial](https://www.cloudera.com/tutorials/getting-started-with-hdp-sandbox.html). 
 
@@ -68,7 +68,7 @@ The `hdfs dfs` command gives you access to all commands to interact with files i
 * Currently, the `hdfs:///tmp` folder doesn't have permissions for everyone to write in. 
   In the Hadoop ecosystem, `root` is not the superuser but `hdfs` is. So we need to be in the `hdfs` user before running set permissions. Run the following script.
 
-```
+```sh
 sudo su -
 su hdfs
 hdfs dfs -chmod -R 777 /tmp
@@ -164,7 +164,7 @@ SELECT truckid FROM geolocation LIMIT 10;
 
 #### 6. Impala
 
-Apache Impala is an open source  massively parallel processing SQL query engine for data stored in a  computer cluster running Apache Hadoop 
+Apache Impala is an open source massively parallel processing SQL query engine for data stored in a  computer cluster running Apache Hadoop 
 
 To save time during queries, Impala does not poll constantly for metadata changes. So the first thing we must do is tell Impala that its metadata is out of date. Then we should see our tables show up, ready to be queried: 
 
@@ -192,7 +192,7 @@ In the editor, on the left of results table you may notice a small graph icon. W
 
 Let's analyze some log files provided by the Cloudera VM. Those are provided locally in `/opt/examples/log_files/access.log.2`. 
 
-_PS: if you still stuck on this tutorial, you can consult the [original piece](https://www.cloudera.com/developers/get-started-with-hadoop-tutorial/exercise-2.html) to start._
+_PS: if you are still stuck on this tutorial, you can consult the [original piece](https://www.cloudera.com/developers/get-started-with-hadoop-tutorial/exercise-2.html) to start._
 
 * Import the data into HDFS, for example inside the folder `/user/cloudera/logs`.
 * On HDFS, you can read the last data with `hdfs dfs -tail <path_to_file>`. Read the latest lines of the log file. What format is it ? How could you extract data from this ?
@@ -254,69 +254,11 @@ invalidate metadata;
 show tables;
 ```
 
-* Display how many times each product has been bought ?ore 
+* Display how many times each product has been bought ?
 * What percentage of `IP addresses`  went to checkout their basket ?
 * If you case the date as a `Date` you should be able to build a web journey of an IP address on the website. For all IP adresses that went to checkout, compute the number of products each has bought before.
 
 * **Bonus** - Try to connect your PowerBI to Impala, by connecting on `localhost:21000`.
-
-
-
-#### PySpark analysis
-
-We can connect to the Hadoop cluster using Pyspark through YARN.
-
-* Install [Miniconda](https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh)
-
-```shell
-wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
-bash Miniconda3-latest-Linux-x86_64.sh
-conda init # if you did not choose to init conda
-```
-
-* Exit the shell and open a new one to activate the conda shell. 
-* Install all you need _(let's not create a conda environment today)_ :
-
-```
-conda install -c cyclus java-jdk
-pip install numpy jupyter jupyterlab pyspark==2.2.3
-```
-
-* Launch a Jupyter notebook and pass an environment variable indicating the path to the Python executable :
-
-```shell
-export JAVA_HOME="/home/cloudera/miniconda3/jre"
-pyspark
-```
-
-I got a `Caused by: java.lang.RuntimeException: The root scratch dir: /tmp/hive on HDFS should be writable. Current permissions are: rwx------` error on my first try. 
-
-* Change the permissions for `/tmp/hive` to 777. You should know that now but `hdfs dfs -chmod -R 777 /tmp` using the `hdfs`user. 
-* Relaunch the command but using the notebook this time :
-
-```shell
-PYSPARK_PYTHON="/home/cloudera/miniconda3/bin/python" PYSPARK_DRIVER_PYTHON_OPTS="/home/cloudera/miniconda3/bin/jupyter-notebook --port=9099 --NotebookApp.token=''" pyspark
-```
-
-This creates a Jupyter notebook on port 9099, you can access it on Firefox through `http://localhost:9099`.
-
-* In your first cell you can try :
-
-```python
-sc = SparkContext.getOrCreate()
-def mod(x):
-    import numpy as np
-    return (x, np.mod(x, 2))
-
-rdd = sc.parallelize(range(1000)).map(mod).take(10)
-print(rdd)
-```
-
-* We need to stop this spark context and start a new one connected to yarn :
-
-```python
-sc.stop()
-```
 
 
 
@@ -389,9 +331,167 @@ public static void main(String[] args) throws Exception {
 
 
 
-## TD3 - Analyzing web scraping
+## TD3 - Analytics on scraped websites
 
-#### Ricco's website
+#### Prerequisites
+
+We are going to install a Python 3 setup to freely play with Pyspark on data in HDFS. Follow the instructions carefully !
+
+###### Miniconda
+
+* Install [Miniconda](https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh)
+
+```shell
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+bash Miniconda3-latest-Linux-x86_64.sh
+conda init # if you did not choose to init conda during install
+```
+
+
+
+###### Python packages
+
+* Open a new Terminal. You should see _(base)_ at the beginning of the command line.
+* Install all the packages inside the base environment _(let's not create a conda environment today, if your environment gets corrupted you can delete the VM and start over)_ :
+
+```
+pip install numpy pandas jupyter scikit-learn matplotlib seaborn requests beautifulsoup4 
+```
+
+
+
+###### Install Java 8
+
+We need Java 8 to run Spark 2.0.
+
+```shell
+conda install -c cyclus java-jdk
+export JAVA_HOME="/home/cloudera/miniconda3/jre"
+```
+
+
+
+###### Install Spark 2
+
+* Look for the Hadoop version : `hadoop version`. It should be `2.6.0`
+* Install Spark 2.4.5 prebuilt for Hadoop 2.6 :
+
+```shell
+wget https://archive.apache.org/dist/spark/spark-2.4.5/spark-2.4.5-bin-hadoop2.6.tgz
+tar -xvf spark-2.4.5-bin-hadoop2.6.tgz
+sudo mv spark-2.4.5-bin-hadoop2.6 /usr/local/spark
+export SPARK_HOME="/usr/local/spark"
+```
+
+We should change 3 files below and replace Spark home path with new version’s path.
+
+> /usr/bin/pyspark
+> /usr/bin/spark-shell
+> /usr/bin/spark-submit
+
+So let’s change `/usr/lib/spark` to `/usr/local/spark` in the files
+
+* Change the path to spark in the 3 files.
+
+
+
+#### Test Pyspark install
+
+* Launch a Pyspark shell :
+
+```shell
+pyspark
+```
+
+* Run some pyspark code :
+
+``` python
+sc.textFile("/opt/examples/log_files/access.log.2").take(10)
+```
+
+* Exit the shell and add path to Hadoop configuration files to access HDFS :
+
+``` shell
+HADOOP_CONF_DIR="/etc/hadoop/conf" pyspark
+```
+* Run some pyspark code :
+
+```python
+sc.textFile("hdfs:///user/cloudera/logs/*").take(10)
+```
+
+* Exit the shell `exit()` and relaunch the command but using the notebook this time :
+
+```shell
+HADOOP_CONF_DIR="/etc/hadoop/conf" PYSPARK_PYTHON="/home/cloudera/miniconda3/bin/python" PYSPARK_DRIVER_PYTHON_OPTS="/home/cloudera/miniconda3/bin/jupyter-notebook --port=9099 --NotebookApp.token=''" pyspark
+```
+
+This creates a Jupyter notebook on port 9099, you can access it on Firefox through `http://localhost:9099`.
+
+* In your first cell you can try :
+
+```python
+sc = SparkContext.getOrCreate()
+def mod(x):
+    import numpy as np
+    return (x, np.mod(x, 2))
+
+rdd = sc.parallelize(range(1000)).map(mod).take(10)
+print(rdd)
+```
+
+Note how we use numpy inside a function inside a `map`.
+
+**Beware :** actually this setup is not optimal because our Spark cluster doesn't run on YARN here so data from HDFS should normally not be accessible. But we are on a single node Cloudera VM so the data can be moved on the same machine and we are not going to manipulate huge data volumes so who cares ? In real life, Spark will be properly configured to HDFS.
+
+
+
+#### Testing Pyspark on Apache logs
+
+Let's analyze some log files provided by the Cloudera VM. Those are provided locally in `/opt/examples/log_files/access.log.2`. 
+
+* Import the data into HDFS, for example inside the folder `/user/cloudera/logs`.
+* On HDFS, you can read the last data with `hdfs dfs -tail <path_to_file>`. Read the latest lines of the log file. What format is it ? How could you extract data from this ?
+* Run a test Spark function :
+
+```python
+sc.textFile("hdfs:///user/cloudera/logs/*").take(10)
+```
+
+* Let's apply the regex from our Hive exercise inside a Spark map to extract IP addresses. Run the following in a new cell :
+
+```python
+import re
+p = re.compile('([^ ]*) - - \\[([^\\]]*)\\] "([^\ ]*) ([^\ ]*) ([^\ ]*)" (\\d*) (\\d*) "([^"]*)" "([^"]*)"')
+
+def extract_ip(sentence):
+    m = p.match(sentence)
+    return (m.group(1))
+
+rdd.map(extract_ip).take(10)
+```
+
+* Using this as base, compute how many times each product has been bought. 
+  * Don't forget you can test your extract function on a single datum before going into the map function.
+* We can extract all the data from the file into a Spark dataframe :
+
+```python
+import re
+p = re.compile('([^ ]*) - - \\[([^\\]]*)\\] "([^\ ]*) ([^\ ]*) ([^\ ]*)" (\\d*) (\\d*) "([^"]*)" "([^"]*)"')
+
+def extract_all(sentence):
+    m = p.match(sentence)
+    return m.groups()
+
+data = rdd.map(extract_all)
+df = data.toDF(["ip","date","method","url","http_version","code1","code2","dash","user_agent"])
+df.show()
+```
+
+* Now do the unstructured log analytics questions in pyspark on this dataframe :
+  * Display how many times each product has been bought ?
+  * What percentage of `IP addresses`  went to checkout their basket ?
+  * If you case the date as a `Date` you should be able to build a web journey of an IP address on the website. For all IP adresses that went to checkout, compute the number of products each has bought before.
 
 
 
@@ -401,12 +501,16 @@ public static void main(String[] args) throws Exception {
 
 ## Appendix
 
-### Cluster installation
+### Ambari installation
 
 For the more adventurous one, there are other ways to install a Hadoop cluster :
 
-* Download the [Hortonworks](https://www.cloudera.com/downloads/hortonworks-sandbox.html) sandbox. https://archive.cloudera.com/hwx-sandbox/hdp/hdp-3.0.1/HDP_3.0.1_virtualbox_181205.ova
-* Using [Ambari](https://cwiki.apache.org/confluence/display/AMBARI/Quick+Start+Guide)
+* Download the [Hortonworks](https://www.cloudera.com/downloads/hortonworks-sandbox.html) sandbox. https://archive.cloudera.com/hwx-sandbox/hdp/hdp-3.0.1/HDP_3.0.1_virtualbox_181205.ova.
+* Using a cloud provider. On AWS, you can spin EC2 instances, so you can use your free AWS credits, or go on [Amazon EMR](https://aws.amazon.com/emr/).
+* Using [Ambari](https://cwiki.apache.org/confluence/display/AMBARI/Quick+Start+Guide)   . 
+* Going full manual.
+
+The following steps indicate my take on the Ambari method inside 3 generated VMs by Vagrant.
 
 
 
@@ -438,7 +542,7 @@ ambari-server setup -s
 ambari-server start
 ```
 
-Once Ambari Server is started, open 8080 on Virtualbox c6801 then hit http://localhost:8080 from your browser on your local computer.
+Once Ambari Server is started, open port 8080 on Virtualbox then hit http://localhost:8080 from your browser on your local computer.
 
 Note that Ambari Server can take some time to fully come up and ready  to accept connections. Keep hitting the URL until you get the login  page. 
 
