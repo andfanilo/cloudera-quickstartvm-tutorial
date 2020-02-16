@@ -355,7 +355,7 @@ conda init # if you did not choose to init conda during install
 * Install all the packages inside the base environment _(let's not create a conda environment today, if your environment gets corrupted you can delete the VM and start over)_ :
 
 ```
-pip install numpy pandas jupyter scikit-learn matplotlib seaborn requests beautifulsoup4 
+pip install numpy pandas jupyter scikit-learn matplotlib seaborn requests beautifulsoup4 scrapy 
 ```
 
 
@@ -389,9 +389,7 @@ We should change 3 files below and replace Spark home path with new version’s 
 > /usr/bin/spark-shell
 > /usr/bin/spark-submit
 
-So let’s change `/usr/lib/spark` to `/usr/local/spark` in the files
-
-* Change the path to spark in the 3 files.
+* So let’s change `/usr/lib/spark` to `/usr/local/spark` in the previous files
 
 
 
@@ -448,10 +446,8 @@ Note how we use numpy inside a function inside a `map`.
 
 #### Testing Pyspark on Apache logs
 
-Let's analyze some log files provided by the Cloudera VM. Those are provided locally in `/opt/examples/log_files/access.log.2`. 
+Let's analyze some log files provided by the Cloudera VM. Those are provided locally in `/opt/examples/log_files/access.log.2` and previously imported to HDFS.
 
-* Import the data into HDFS, for example inside the folder `/user/cloudera/logs`.
-* On HDFS, you can read the last data with `hdfs dfs -tail <path_to_file>`. Read the latest lines of the log file. What format is it ? How could you extract data from this ?
 * Run a test Spark function :
 
 ```python
@@ -464,7 +460,7 @@ sc.textFile("hdfs:///user/cloudera/logs/*").take(10)
 import re
 p = re.compile('([^ ]*) - - \\[([^\\]]*)\\] "([^\ ]*) ([^\ ]*) ([^\ ]*)" (\\d*) (\\d*) "([^"]*)" "([^"]*)"')
 
-def extract_ip(sentence):
+def extract_ip(sentence): # you can test this function on a single Apache log to test
     m = p.match(sentence)
     return (m.group(1))
 
@@ -472,7 +468,8 @@ rdd.map(extract_ip).take(10)
 ```
 
 * Using this as base, compute how many times each product has been bought. 
-  * Don't forget you can test your extract function on a single datum before going into the map function.
+  * Don't forget you can test your extract function on a single datum before going into the map function. For example take one line of the Apache log with `rdd.take(1)[0]`, see hat happens when you pass it to `extract_ip` and when you know the result, use the function in `rdd.map` to apply it to every log ! 
+  * Recall you should `return (key,value)` pairs from the function inside the `rdd.map` so you can use `rdd.reduceByKey`.
 * We can extract all the data from the file into a Spark dataframe :
 
 ```python
@@ -495,7 +492,20 @@ df.show()
 
 
 
-#### Wikipedia file dumps 
+#### Studying Wikipedia file dumps 
+
+* Read a bit on https://en.wikipedia.org/wiki/Wikipedia:Database_download. You can find the full [dump archives here](https://dumps.wikimedia.org/enwiki/latest/).
+
+* Get [pagelinks](https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pagelinks.sql.gz) data. You can find the structure in [this page](https://www.mediawiki.org/wiki/Manual:Pagelinks_table).
+  * Download and unzipping takes a long time, it's 6GB compressed, 17GB uncompressed...
+
+```
+wget https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pagelinks.sql.gz
+gzip -d enwiki-latest-pagelinks.sql.gz
+```
+
+* Get a [sample](https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles1.xml-p10p30302.bz2) of wikipedia page and the [full one](https://dumps.wikimedia.org/enwiki/latest/enwiki-latest-pages-articles.xml.bz2). Unzip them.
+* Use [spark-xml](https://github.com/databricks/spark-xml) on the <page> tag to retrieve each page has a row.
 
 
 
@@ -507,7 +517,7 @@ For the more adventurous one, there are other ways to install a Hadoop cluster :
 
 * Download the [Hortonworks](https://www.cloudera.com/downloads/hortonworks-sandbox.html) sandbox. https://archive.cloudera.com/hwx-sandbox/hdp/hdp-3.0.1/HDP_3.0.1_virtualbox_181205.ova.
 * Using a cloud provider. On AWS, you can spin EC2 instances, so you can use your free AWS credits, or go on [Amazon EMR](https://aws.amazon.com/emr/).
-* Using [Ambari](https://cwiki.apache.org/confluence/display/AMBARI/Quick+Start+Guide)   . 
+* Using [Ambari](https://cwiki.apache.org/confluence/display/AMBARI/Quick+Start+Guide). 
 * Going full manual.
 
 The following steps indicate my take on the Ambari method inside 3 generated VMs by Vagrant.
